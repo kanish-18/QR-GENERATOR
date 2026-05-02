@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR Studio Pro — Premium QR Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #050810;
+    --surface: #0c1220;
+    --surface2: #111827;
+    --border: rgba(99,130,255,0.12);
+    --border2: rgba(99,130,255,0.22);
+    --blue: #4f7cff;
+    --blue2: #7aa3ff;
+    --purple: #a259ff;
+    --cyan: #00d4ff;
+    --green: #00e5a0;
+    --text: #f0f4ff;
+    --muted: #6b7fa3;
+    --glow-blue: rgba(79,124,255,0.35);
+    --glow-purple: rgba(162,89,255,0.25);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    cursor: none;
+  }
+
+  /* Custom cursor */
+  #cursor {
+    position: fixed; width: 10px; height: 10px;
+    background: var(--blue); border-radius: 50%;
+    pointer-events: none; z-index: 9999;
+    transform: translate(-50%,-50%);
+    transition: transform 0.1s, background 0.2s;
+    mix-blend-mode: screen;
+  }
+  #cursor-ring {
+    position: fixed; width: 36px; height: 36px;
+    border: 1.5px solid rgba(79,124,255,0.5);
+    border-radius: 50%; pointer-events: none; z-index: 9998;
+    transform: translate(-50%,-50%);
+    transition: transform 0.18s cubic-bezier(.22,1,.36,1), width 0.25s, height 0.25s, border-color 0.2s;
+  }
+  body:has(button:hover) #cursor-ring,
+  body:has(input:hover) #cursor-ring { width: 52px; height: 52px; border-color: var(--blue); }
+
+  /* Animated BG grid */
+  .bg-grid {
+    position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+  }
+  .bg-grid::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(79,124,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,124,255,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    animation: gridDrift 20s linear infinite;
+  }
+  @keyframes gridDrift { to { transform: translate(48px, 48px); } }
+
+  .bg-orbs {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  }
+  .orb {
+    position: absolute; border-radius: 50%;
+    filter: blur(80px); opacity: 0.6;
+    animation: orbFloat var(--d, 18s) ease-in-out infinite alternate;
+  }
+  .orb1 { width: 500px; height: 500px; background: rgba(79,124,255,0.18); top: -150px; left: -100px; --d: 15s; }
+  .orb2 { width: 400px; height: 400px; background: rgba(162,89,255,0.15); top: 30%; right: -120px; --d: 22s; animation-delay: -8s; }
+  .orb3 { width: 350px; height: 350px; background: rgba(0,212,255,0.1); bottom: -100px; left: 30%; --d: 19s; animation-delay: -4s; }
+  @keyframes orbFloat {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(40px, -30px) scale(1.08); }
+  }
+
+  /* Layout */
+  .page { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* Header */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 40px;
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    background: rgba(5,8,16,0.6);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo {
+    font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .logo-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+    box-shadow: 0 0 20px var(--glow-blue);
+    animation: logoPulse 3s ease-in-out infinite;
+  }
+  @keyframes logoPulse {
+    0%,100% { box-shadow: 0 0 15px var(--glow-blue); }
+    50% { box-shadow: 0 0 30px var(--glow-blue), 0 0 60px rgba(79,124,255,0.2); }
+  }
+  .logo-text { background: linear-gradient(135deg, var(--blue2), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 3px 8px; background: rgba(79,124,255,0.1); border: 1px solid var(--border2); border-radius: 20px; color: var(--blue2); letter-spacing: 1px; }
+
+  /* Hero */
+  .hero {
+    text-align: center; padding: 60px 40px 20px;
+    animation: heroIn 0.8s cubic-bezier(.22,1,.36,1) both;
+  }
+  @keyframes heroIn { from { opacity: 0; transform: translateY(30px); } }
+  .hero-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 2px;
+    color: var(--cyan); text-transform: uppercase;
+    padding: 6px 14px; border: 1px solid rgba(0,212,255,0.25); border-radius: 20px;
+    background: rgba(0,212,255,0.06); margin-bottom: 20px;
+    animation: tagPulse 2s ease-in-out infinite;
+  }
+  @keyframes tagPulse {
+    0%,100% { border-color: rgba(0,212,255,0.25); }
+    50% { border-color: rgba(0,212,255,0.6); box-shadow: 0 0 20px rgba(0,212,255,0.15); }
+  }
+  .hero-dot { width: 7px; height: 7px; background: var(--cyan); border-radius: 50%; animation: blink 1.5s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .hero h1 {
+    font-family: 'Syne', sans-serif; font-weight: 800;
+    font-size: clamp(36px, 6vw, 72px);
+    line-height: 1.05; letter-spacing: -2px; margin-bottom: 16px;
+  }
+  .hero h1 .grad { background: linear-gradient(135deg, var(--blue2) 0%, var(--purple) 50%, var(--cyan) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-size: 200%; animation: gradShift 4s ease infinite; }
+  @keyframes gradShift { 0%,100%{background-position:0%} 50%{background-position:100%} }
+  .hero p { color: var(--muted); font-size: 16px; font-weight: 300; max-width: 480px; margin: 0 auto; }
+
+  /* Main card */
+  .main-card {
+    max-width: 920px; margin: 40px auto; padding: 0 24px;
+    animation: cardIn 0.9s 0.2s cubic-bezier(.22,1,.36,1) both;
+  }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(40px); } }
+
+  .glass-card {
+    background: rgba(12,18,32,0.85);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    backdrop-filter: blur(24px);
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+    transition: box-shadow 0.3s;
+  }
+  .glass-card:hover { box-shadow: 0 32px 100px rgba(0,0,0,0.6), 0 0 60px rgba(79,124,255,0.08), inset 0 1px 0 rgba(255,255,255,0.06); }
+
+  .card-inner {
+    display: grid; grid-template-columns: 1fr 380px; gap: 0;
+  }
+
+  /* Controls panel */
+  .controls { padding: 36px 32px; border-right: 1px solid var(--border); }
+  .section-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 2px;
+    color: var(--blue); text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+  }
+  .section-label::before { content: '//'; color: var(--muted); }
+
+  .url-input-wrap {
+    position: relative; margin-bottom: 28px;
+  }
+  .url-icon {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); font-size: 16px; pointer-events: none;
+    transition: color 0.2s;
+  }
+  .url-input-wrap:focus-within .url-icon { color: var(--blue); }
+  .url-input {
+    width: 100%; padding: 14px 14px 14px 44px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    border-radius: 12px; color: var(--text);
+    font-family: 'JetBrains Mono', monospace; font-size: 13px;
+    outline: none; transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  }
+  .url-input:focus {
+    border-color: var(--blue); box-shadow: 0 0 0 3px rgba(79,124,255,0.15);
+    background: rgba(79,124,255,0.06);
+  }
+  .url-input::placeholder { color: var(--muted); }
+
+  /* Color pickers */
+  .color-row { display: flex; gap: 16px; margin-bottom: 28px; }
+  .color-field { flex: 1; }
+  .color-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; display: block; font-weight: 500; }
+  .color-pick-wrap {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 12px;
+    transition: border-color 0.2s;
+    cursor: pointer;
+  }
+  .color-pick-wrap:hover { border-color: var(--border2); }
+  .color-swatch {
+    width: 28px; height: 28px; border-radius: 6px; border: none; cursor: pointer;
+    outline: none; padding: 0; background: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    overflow: hidden;
+  }
+  .color-swatch::-webkit-color-swatch-wrapper { padding: 0; }
+  .color-swatch::-webkit-color-swatch { border: none; border-radius: 6px; }
+  .color-hex { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); flex: 1; background: none; border: none; outline: none; }
+
+  /* Style selector */
+  .style-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 28px; }
+  .style-opt {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 12px 8px; border-radius: 10px;
+    border: 1px solid var(--border); background: rgba(255,255,255,0.02);
+    cursor: pointer; transition: all 0.2s; font-size: 11px; color: var(--muted);
+    font-weight: 500; text-align: center;
+    -webkit-user-select: none; user-select: none;
+  }
+  .style-opt:hover { border-color: var(--border2); color: var(--text); background: rgba(79,124,255,0.06); }
+  .style-opt.active { border-color: var(--blue); background: rgba(79,124,255,0.12); color: var(--blue2); box-shadow: 0 0 20px rgba(79,124,255,0.15); }
+  .style-icon { font-size: 22px; }
+
+  /* Size slider */
+  .slider-wrap { margin-bottom: 28px; }
+  .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .slider-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .slider-val { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--blue); }
+  input[type=range] {
+    -webkit-appearance: none; width: 100%; height: 4px;
+    background: rgba(255,255,255,0.06); border-radius: 2px; outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    cursor: pointer; box-shadow: 0 0 12px var(--glow-blue);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.2); box-shadow: 0 0 20px var(--glow-blue); }
+
+  /* Error level */
+  .ecc-row { display: flex; gap: 8px; margin-bottom: 28px; }
+  .ecc-btn {
+    flex: 1; padding: 8px 4px; border-radius: 8px; border: 1px solid var(--border);
+    background: rgba(255,255,255,0.02); color: var(--muted); font-size: 12px;
+    font-weight: 600; cursor: pointer; transition: all 0.2s;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .ecc-btn:hover { border-color: var(--border2); color: var(--text); }
+  .ecc-btn.active { border-color: var(--green); background: rgba(0,229,160,0.1); color: var(--green); box-shadow: 0 0 16px rgba(0,229,160,0.15); }
+
+  /* Generate button */
+  .gen-btn {
+    width: 100%; padding: 16px; border-radius: 14px; border: none;
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    color: white; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px;
+    letter-spacing: 0.5px; cursor: pointer;
+    position: relative; overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 8px 30px rgba(79,124,255,0.35);
+  }
+  .gen-btn::before {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .gen-btn:hover { transform: translateY(-2px); box-shadow: 0 14px 40px rgba(79,124,255,0.5); }
+  .gen-btn:hover::before { opacity: 1; }
+  .gen-btn:active { transform: translateY(0); }
+  .gen-btn-shine {
+    position: absolute; top: 0; left: -100%; width: 60%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+    animation: shine 2.5s ease-in-out infinite;
+  }
+  @keyframes shine { 0%{left:-100%} 50%,100%{left:150%} }
+
+  /* Preview panel */
+  .preview-panel {
+    padding: 36px 32px; display: flex; flex-direction: column; align-items: center; gap: 24px;
+    background: rgba(255,255,255,0.015);
+  }
+
+  .qr-stage {
+    position: relative; width: 260px; height: 260px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* Animated rings around QR */
+  .qr-ring {
+    position: absolute; border-radius: 50%; border: 1px solid;
+    animation: ringPulse 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .qr-ring:nth-child(1) { width: 290px; height: 290px; border-color: rgba(79,124,255,0.25); animation-delay: 0s; }
+  .qr-ring:nth-child(2) { width: 320px; height: 320px; border-color: rgba(162,89,255,0.15); animation-delay: 0.7s; }
+  .qr-ring:nth-child(3) { width: 350px; height: 350px; border-color: rgba(0,212,255,0.1); animation-delay: 1.4s; }
+  @keyframes ringPulse {
+    0%,100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.03); }
+  }
+
+  /* Corner accents */
+  .qr-corner {
+    position: absolute; width: 20px; height: 20px;
+    border-color: var(--blue); border-style: solid; pointer-events: none;
+    transition: border-color 0.3s;
+  }
+  .qr-corner.tl { top: 2px; left: 2px; border-width: 2px 0 0 2px; border-radius: 4px 0 0 0; }
+  .qr-corner.tr { top: 2px; right: 2px; border-width: 2px 2px 0 0; border-radius: 0 4px 0 0; }
+  .qr-corner.bl { bottom: 2px; left: 2px; border-width: 0 0 2px 2px; border-radius: 0 0 0 4px; }
+  .qr-corner.br { bottom: 2px; right: 2px; border-width: 0 2px 2px 0; border-radius: 0 0 4px 0; }
+
+  .qr-box {
+    width: 240px; height: 240px; border-radius: 16px;
+    background: white;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; position: relative;
+    box-shadow: 0 0 60px rgba(79,124,255,0.2), 0 20px 60px rgba(0,0,0,0.5);
+    transition: box-shadow 0.4s, transform 0.4s;
+  }
+  .qr-box:hover { transform: scale(1.03); box-shadow: 0 0 80px rgba(79,124,255,0.35), 0 30px 80px rgba(0,0,0,0.5); }
+  #qr-render { display: flex; align-items: center; justify-content: center; }
+  #qr-render canvas, #qr-render img { border-radius: 8px; }
+
+  /* Placeholder */
+  .qr-placeholder {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    color: #aaa;
+  }
+  .placeholder-grid {
+    display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; opacity: 0.3;
+  }
+  .placeholder-grid div {
+    width: 18px; height: 18px; border-radius: 2px;
+    background: #333; animation: placeholderFlicker calc(2s + var(--d, 0s)) ease-in-out infinite;
+  }
+  @keyframes placeholderFlicker { 0%,100%{opacity:0.3} 50%{opacity:0.8} }
+
+  /* Status badges */
+  .status-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .status-badge {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    padding: 4px 10px; border-radius: 20px; border: 1px solid;
+    display: flex; align-items: center; gap: 5px;
+    transition: all 0.3s;
+  }
+  .badge-blue { border-color: rgba(79,124,255,0.35); color: var(--blue2); background: rgba(79,124,255,0.08); }
+  .badge-green { border-color: rgba(0,229,160,0.35); color: var(--green); background: rgba(0,229,160,0.08); }
+  .badge-purple { border-color: rgba(162,89,255,0.35); color: #c084fc; background: rgba(162,89,255,0.08); }
+
+  /* Download button */
+  .dl-btn {
+    width: 100%; padding: 13px; border-radius: 12px;
+    border: 1px solid var(--border2); background: rgba(79,124,255,0.08);
+    color: var(--blue2); font-family: 'DM Sans', sans-serif; font-weight: 500; font-size: 14px;
+    cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .dl-btn:hover { background: rgba(79,124,255,0.18); border-color: var(--blue); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(79,124,255,0.2); }
+  .dl-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* Particle burst on generate */
+  .particle {
+    position: fixed; pointer-events: none; border-radius: 50%;
+    animation: particleFly 0.8s ease-out forwards;
+  }
+  @keyframes particleFly {
+    0% { transform: translate(0,0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+  }
+
+  /* Scan line animation on QR */
+  .scan-line {
+    position: absolute; left: 4px; right: 4px; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), var(--blue), transparent);
+    border-radius: 1px; pointer-events: none; opacity: 0;
+    box-shadow: 0 0 8px var(--cyan);
+  }
+  .scan-line.scanning {
+    animation: scanMove 1.5s ease-in-out;
+  }
+  @keyframes scanMove {
+    0% { top: 4px; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: calc(100% - 6px); opacity: 0; }
+  }
+
+  /* QR generating animation */
+  @keyframes qrReveal {
+    0% { opacity: 0; filter: blur(8px); transform: scale(0.9) rotate(-2deg); }
+    100% { opacity: 1; filter: blur(0); transform: scale(1) rotate(0); }
+  }
+  .qr-fresh { animation: qrReveal 0.5s cubic-bezier(.22,1,.36,1) both; }
+
+  /* Floating labels */
+  .float-tag {
+    position: absolute; font-family: 'JetBrains Mono', monospace; font-size: 9px;
+    padding: 3px 7px; background: rgba(5,8,16,0.9); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--muted); pointer-events: none;
+    animation: floatTag 4s ease-in-out infinite;
+  }
+  .float-tag.tl { top: -14px; left: 10px; animation-delay: 0s; }
+  .float-tag.br { bottom: -14px; right: 10px; animation-delay: 2s; color: var(--cyan); border-color: rgba(0,212,255,0.25); }
+  @keyframes floatTag { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: rgba(12,18,32,0.95); border: 1px solid var(--border2);
+    border-radius: 12px; padding: 12px 20px;
+    font-size: 13px; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    transition: transform 0.4s cubic-bezier(.22,1,.36,1), opacity 0.4s;
+    opacity: 0; z-index: 200;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  /* Footer */
+  footer {
+    text-align: center; padding: 30px 20px;
+    color: var(--muted); font-size: 12px;
+    font-family: 'JetBrains Mono', monospace; letter-spacing: 1px;
+    border-top: 1px solid var(--border); margin-top: 20px;
+  }
+  footer span { color: var(--blue2); }
+
+  /* Responsive */
+  @media (max-width: 720px) {
+    .card-inner { grid-template-columns: 1fr; }
+    .controls { border-right: none; border-bottom: 1px solid var(--border); }
+    .preview-panel { padding: 24px 20px; }
+    header { padding: 16px 20px; }
+    .hero { padding: 40px 20px 10px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+
+<div class="bg-grid"></div>
+<div class="bg-orbs">
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
+</div>
+
+<div class="page">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">⬡</div>
+      <span class="logo-text">QR Studio Pro</span>
+    </div>
+    <div class="badge">v2.0 · PREMIUM</div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-tag">
+      <div class="hero-dot"></div>
+      Next-Gen QR Generation Engine
+    </div>
+    <h1>Generate <span class="grad">Beautiful</span><br>QR Codes</h1>
+    <p>Craft pixel-perfect, high-fidelity QR codes with full customization — for brands that mean business.</p>
+  </div>
+
+  <div class="main-card">
+    <div class="glass-card">
+      <div class="card-inner">
+
+        <!-- Controls -->
+        <div class="controls">
+
+          <div class="section-label">Target URL</div>
+          <div class="url-input-wrap">
+            <span class="url-icon">🔗</span>
+            <input type="text" class="url-input" id="urlInput"
+              placeholder="https://your-website.com"
+              value="https://qr-studio-pro-33yr3sbwybxpuewhvumseh.streamlit.app">
+          </div>
+
+          <div class="section-label">QR Colors</div>
+          <div class="color-row">
+            <div class="color-field">
+              <label class="color-label">Foreground</label>
+              <div class="color-pick-wrap" onclick="document.getElementById('fgColor').click()">
+                <input type="color" class="color-swatch" id="fgColor" value="#000000" oninput="updateColorHex('fg',this.value)">
+                <input class="color-hex" id="fgHex" value="#000000" maxlength="7" oninput="syncColorPicker('fg',this.value)" onclick="this.select()">
+              </div>
+            </div>
+            <div class="color-field">
+              <label class="color-label">Background</label>
+              <div class="color-pick-wrap" onclick="document.getElementById('bgColor').click()">
+                <input type="color" class="color-swatch" id="bgColor" value="#ffffff" oninput="updateColorHex('bg',this.value)">
+                <input class="color-hex" id="bgHex" value="#ffffff" maxlength="7" oninput="syncColorPicker('bg',this.value)" onclick="this.select()">
+              </div>
+            </div>
+          </div>
+
+          <div class="section-label">QR Style</div>
+          <div class="style-grid">
+            <div class="style-opt active" data-style="square" onclick="setStyle(this,'square')"><div class="style-icon">▪</div>Classic</div>
+            <div class="style-opt" data-style="round" onclick="setStyle(this,'round')"><div class="style-icon">●</div>Rounded</div>
+            <div class="style-opt" data-style="dot" onclick="setStyle(this,'dot')"><div class="style-icon">◉</div>Dots</div>
+          </div>
+
+          <div class="slider-wrap">
+            <div class="slider-header">
+              <span class="slider-label">QR Size</span>
+              <span class="slider-val" id="sizeVal">220 px</span>
+            </div>
+            <input type="range" id="sizeSlider" min="180" max="300" value="220" oninput="updateSize(this.value)">
+          </div>
+
+          <div class="section-label">Error Correction</div>
+          <div class="ecc-row">
+            <button class="ecc-btn" onclick="setEcc(this,'L')">L · 7%</button>
+            <button class="ecc-btn" onclick="setEcc(this,'M')">M · 15%</button>
+            <button class="ecc-btn active" onclick="setEcc(this,'Q')">Q · 25%</button>
+            <button class="ecc-btn" onclick="setEcc(this,'H')">H · 30%</button>
+          </div>
+
+          <button class="gen-btn" onclick="generateQR()">
+            <div class="gen-btn-shine"></div>
+            ✦ Generate Premium QR
+          </button>
+        </div>
+
+        <!-- Preview -->
+        <div class="preview-panel">
+          <div class="section-label" style="align-self:flex-start">Live Preview</div>
+
+          <div class="qr-stage">
+            <div class="qr-ring"></div>
+            <div class="qr-ring"></div>
+            <div class="qr-ring"></div>
+            <div class="qr-box" id="qrBox">
+              <div class="qr-corner tl"></div>
+              <div class="qr-corner tr"></div>
+              <div class="qr-corner bl"></div>
+              <div class="qr-corner br"></div>
+              <div class="scan-line" id="scanLine"></div>
+              <div id="qr-render">
+                <div class="qr-placeholder">
+                  <div class="placeholder-grid" id="placeholderGrid"></div>
+                  <span style="font-size:11px;color:var(--muted)">Enter URL to generate</span>
+                </div>
+              </div>
+            </div>
+            <div class="float-tag tl" id="floatRes">300 DPI</div>
+            <div class="float-tag br" id="floatEcc">Q · 25% ECC</div>
+          </div>
+
+          <div class="status-row">
+            <div class="status-badge badge-blue">⬡ Reed-Solomon</div>
+            <div class="status-badge badge-green" id="statusEcc">✓ Q Level</div>
+            <div class="status-badge badge-purple" id="statusSize">220px</div>
+          </div>
+
+          <button class="dl-btn" id="dlBtn" onclick="downloadQR()" disabled>
+            ↓ Download QR · PNG
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    © 2026 · Built by <span>KANISH</span> · App Innovation Technologies · QR Studio Pro <span>v2.0</span>
+  </footer>
+</div>
+
+<div class="toast" id="toast">
+  <span id="toastIcon">✓</span>
+  <span id="toastMsg">QR Generated!</span>
+</div>
+
+<script>
+// --- Cursor ---
+const cur = document.getElementById('cursor');
+const ring = document.getElementById('cursor-ring');
+let mx = 0, my = 0, rx = 0, ry = 0;
+document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; cur.style.left = mx+'px'; cur.style.top = my+'px'; });
+(function animRing() {
+  rx += (mx - rx) * 0.12; ry += (my - ry) * 0.12;
+  ring.style.left = rx+'px'; ring.style.top = ry+'px';
+  requestAnimationFrame(animRing);
+})();
+
+// --- Placeholder grid ---
+(function buildPlaceholder() {
+  const g = document.getElementById('placeholderGrid');
+  if (!g) return;
+  for (let i = 0; i < 49; i++) {
+    const d = document.createElement('div');
+    d.style.setProperty('--d', (Math.random()*2)+'s');
+    g.appendChild(d);
+  }
+})();
+
+// --- State ---
+let currentStyle = 'square';
+let currentEcc = 'Q';
+let qrGenerated = false;
+let qrCanvas = null;
+
+// --- Color sync ---
+function updateColorHex(which, val) {
+  document.getElementById(which+'Hex').value = val;
+}
+function syncColorPicker(which, val) {
+  if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+    document.getElementById(which+'Color').value = val;
+    if (qrGenerated) generateQR();
+  }
+}
+
+// --- Style ---
+function setStyle(el, style) {
+  document.querySelectorAll('.style-opt').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  currentStyle = style;
+  if (qrGenerated) generateQR();
+}
+
+// --- Size ---
+function updateSize(v) {
+  document.getElementById('sizeVal').textContent = v + ' px';
+  document.getElementById('statusSize').textContent = v+'px';
+  if (qrGenerated) generateQR();
+}
+
+// --- ECC ---
+function setEcc(el, level) {
+  document.querySelectorAll('.ecc-btn').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  currentEcc = level;
+  const eccMap = { L: '7%', M: '15%', Q: '25%', H: '30%' };
+  document.getElementById('floatEcc').textContent = level + ' · ' + eccMap[level] + ' ECC';
+  document.getElementById('statusEcc').textContent = '✓ ' + level + ' Level';
+  if (qrGenerated) generateQR();
+}
+
+// --- Main QR generator ---
+function generateQR() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) { showToast('⚠', 'Please enter a URL first'); return; }
+
+  const fgColor = document.getElementById('fgColor').value;
+  const bgColor = document.getElementById('bgColor').value;
+  const size = parseInt(document.getElementById('sizeSlider').value);
+
+  const render = document.getElementById('qr-render');
+  render.innerHTML = '';
+
+  // Generate via QRCode.js
+  const eccMap = { L: QRCode.CorrectLevel.L, M: QRCode.CorrectLevel.M, Q: QRCode.CorrectLevel.Q, H: QRCode.CorrectLevel.H };
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'qr-fresh';
+  render.appendChild(wrapper);
+
+  new QRCode(wrapper, {
+    text: url,
+    width: size,
+    height: size,
+    colorDark: fgColor,
+    colorLight: bgColor,
+    correctLevel: eccMap[currentEcc]
+  });
+
+  // Post-process for rounded/dot styles
+  setTimeout(() => {
+    const canvas = wrapper.querySelector('canvas');
+    if (!canvas) return;
+    if (currentStyle !== 'square') {
+      const styledCanvas = applyStyle(canvas, size, fgColor, bgColor, currentStyle);
+      wrapper.innerHTML = '';
+      styledCanvas.className = 'qr-fresh';
+      wrapper.appendChild(styledCanvas);
+      qrCanvas = styledCanvas;
+    } else {
+      qrCanvas = canvas;
+    }
+
+    // Scale QR box to size
+    const box = document.getElementById('qrBox');
+    const targetSize = Math.min(size + 20, 250);
+    box.style.width = targetSize+'px'; box.style.height = targetSize+'px';
+
+    // Trigger scan line
+    const sl = document.getElementById('scanLine');
+    sl.classList.remove('scanning');
+    void sl.offsetWidth;
+    sl.classList.add('scanning');
+
+    document.getElementById('dlBtn').disabled = false;
+    qrGenerated = true;
+
+    // Particle burst
+    spawnParticles();
+    showToast('✦', 'QR Code Generated!');
+  }, 60);
+}
+
+// --- Style processor ---
+function applyStyle(srcCanvas, size, fg, bg, style) {
+  const dest = document.createElement('canvas');
+  dest.width = size; dest.height = size;
+  const ctx = dest.getContext('2d');
+  const src = srcCanvas.getContext('2d');
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, size, size);
+
+  const imgData = src.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+  const moduleSize = srcCanvas.width / 25; // rough estimate
+  const cellSize = size / 25;
+  const r = style === 'round' ? cellSize * 0.38 : cellSize * 0.42;
+
+  ctx.fillStyle = fg;
+
+  for (let row = 0; row < 25; row++) {
+    for (let col = 0; col < 25; col++) {
+      const px = Math.floor((col + 0.5) * (srcCanvas.width / 25));
+      const py = Math.floor((row + 0.5) * (srcCanvas.height / 25));
+      const idx = (py * srcCanvas.width + px) * 4;
+      const isDark = imgData.data[idx] < 128;
+      if (isDark) {
+        const cx = (col + 0.5) * cellSize;
+        const cy = (row + 0.5) * cellSize;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  return dest;
+}
+
+// --- Particles ---
+function spawnParticles() {
+  const box = document.getElementById('qrBox');
+  const rect = box.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const colors = ['#4f7cff','#a259ff','#00d4ff','#00e5a0','#f59e0b'];
+
+  for (let i = 0; i < 18; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = 4 + Math.random() * 6;
+    const angle = (Math.PI * 2 * i) / 18 + Math.random() * 0.5;
+    const dist = 80 + Math.random() * 80;
+    p.style.cssText = `
+      width:${size}px; height:${size}px;
+      left:${cx}px; top:${cy}px;
+      background:${colors[Math.floor(Math.random()*colors.length)]};
+      --tx:${Math.cos(angle)*dist}px;
+      --ty:${Math.sin(angle)*dist}px;
+      animation-duration:${0.6 + Math.random()*0.4}s;
+    `;
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 1200);
+  }
+}
+
+// --- Download ---
+function downloadQR() {
+  if (!qrCanvas) return;
+  const link = document.createElement('a');
+  link.download = 'qr-studio-pro.png';
+  link.href = qrCanvas.toDataURL('image/png');
+  link.click();
+  showToast('↓', 'Downloading QR Code…');
+}
+
+// --- Toast ---
+let toastTimer;
+function showToast(icon, msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastIcon').textContent = icon;
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// --- Auto-generate on input change ---
+let debounceTimer;
+document.getElementById('urlInput').addEventListener('input', () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => { if (document.getElementById('urlInput').value.trim()) generateQR(); }, 600);
+});
+
+// Color pickers auto-regenerate
+['fgColor','bgColor'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => { if (qrGenerated) setTimeout(generateQR, 50); });
+});
+
+// --- Auto-generate on load ---
+window.addEventListener('load', () => setTimeout(generateQR, 500));
+</script>
+</body>
+</html>
